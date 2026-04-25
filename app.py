@@ -1,5 +1,5 @@
 """
-app.py — Prescient · Attention-Powered Next Word Predictor (Lab 7)
+app.py — Brevity Next-Word Predictor Backend (FastAPI)
 
 Local:
     python app.py
@@ -19,6 +19,7 @@ import uvicorn
 BASE = os.path.dirname(os.path.abspath(__file__))
 PAD, UNK, SOS, EOS = "<pad>", "<unk>", "<sos>", "<eos>"
 
+# ─── Vocab (must match train_predictor.py exactly for pickle) ─────────────────
 from collections import Counter
 
 class Vocab:
@@ -60,7 +61,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Device: {device}")
 
 
-# ─── Model ────────────────────────────────────────────────────────────────────
+# ─── Model (must match train_predictor.py exactly) ────────────────────────────
 class Encoder(nn.Module):
     def __init__(self):
         super().__init__()
@@ -116,12 +117,11 @@ class Decoder(nn.Module):
 
     def step(self, token, h, c, enc_out, src_mask):
         emb  = self.dropout(self.embed(token.unsqueeze(1)))
-        attn = self.attention(h[-1], enc_out, src_mask)  # [1, src_len]
+        attn = self.attention(h[-1], enc_out, src_mask)
         ctx  = attn.unsqueeze(1) @ enc_out
         out, (h, c) = self.lstm(torch.cat([emb, ctx], dim=-1), (h, c))
         pred = self.fc_out(torch.cat([out, ctx, emb], dim=-1))
-        # Return attn weights too so we can visualise them
-        return pred.squeeze(1), h, c, attn.squeeze(0).tolist()
+        return pred.squeeze(1), h, c
 
 
 # ─── Load weights ─────────────────────────────────────────────────────────────
@@ -135,53 +135,39 @@ encoder.eval(); decoder.eval()
 print("Model ready.")
 
 
-# ─── Inference — now also returns attention matrix ────────────────────────────
+# ─── Inference ────────────────────────────────────────────────────────────────
 def tokenize(text):
     text = text.lower()
     text = re.sub(r"[^a-z0-9\s'.,!?-]", " ", text)
     text = re.sub(r"\s+", " ", text).strip()
     return text.split()
 
-def run_inference(text: str, num_words: int = 5):
+def run_inference(text: str, num_words: int = 5) -> list:
     tokens  = tokenize(text)[-CONFIG["context_len"]:]
     src_ids = vocab.encode(tokens, CONFIG["context_len"])
     src     = torch.tensor([src_ids], dtype=torch.long, device=device)
     src_mask = (src != vocab.w2i[PAD])
 
-    # Actual context words (no padding tokens shown to user)
-    context_words = [vocab.i2w.get(i, UNK) if i != 0 else None for i in src_ids]
-    context_words = [w for w in context_words if w and w not in (PAD, UNK)]
-
-    predicted_words = []
-    # attention_matrix[i] = attention weights over context words when predicting word i
-    attention_matrix = []
-
     with torch.no_grad():
         enc_out, h, c = encoder(src)
-        token = torch.tensor([vocab.w2i[SOS]], device=device)
+        token  = torch.tensor([vocab.w2i[SOS]], device=device)
+        result = []
 
         for _ in range(num_words):
-            pred, h, c, attn_weights = decoder.step(token, h, c, enc_out, src_mask)
+            pred, h, c = decoder.step(token, h, c, enc_out, src_mask)
             for special in (vocab.w2i[PAD], vocab.w2i[UNK], vocab.w2i[SOS]):
                 pred[0, special] = -1e9
             idx = pred.argmax(-1).item()
             if idx == vocab.w2i[EOS]:
                 break
-            word = vocab.i2w.get(idx, UNK)
-            predicted_words.append(word)
-            # Only keep weights for the real (non-padding) context positions
-            real_attn = attn_weights[:len(context_words)]
-            # Renormalise over real positions
-            total = sum(real_attn) or 1.0
-            real_attn = [round(v / total, 4) for v in real_attn]
-            attention_matrix.append(real_attn)
+            result.append(vocab.i2w.get(idx, UNK))
             token = torch.tensor([idx], device=device)
 
-    return predicted_words, context_words, attention_matrix
+    return result
 
 
 # ─── FastAPI ──────────────────────────────────────────────────────────────────
-app = FastAPI(title="Prescient — Attention Next Word Predictor")
+app = FastAPI(title="Brevity — Next Word Predictor")
 app.add_middleware(CORSMiddleware, allow_origins=["*"],
                    allow_methods=["*"], allow_headers=["*"])
 
@@ -201,15 +187,13 @@ def predict(req: PredictRequest):
     if len(text.split()) < 3:
         raise HTTPException(400, "Please enter at least 3 words.")
     num_words = max(1, min(req.num_words, 10))
-    words, context_words, attention_matrix = run_inference(text, num_words)
+    words = run_inference(text, num_words)
     if not words:
         raise HTTPException(500, "Model returned empty output.")
     return {
-        "input":            text,
-        "prediction":       words,
-        "completed":        text.rstrip() + " " + " ".join(words),
-        "context_words":    context_words,
-        "attention_matrix": attention_matrix,  # shape: [num_predicted, num_context]
+        "input":      text,
+        "prediction": words,
+        "completed":  text.rstrip() + " " + " ".join(words)
     }
 
 @app.get("/health")
