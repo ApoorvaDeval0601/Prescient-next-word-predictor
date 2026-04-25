@@ -7,3 +7,4 @@ model/*.pkl
 model/*.json
 model/history.json
 .env
+*.pt
