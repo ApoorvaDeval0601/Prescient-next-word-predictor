@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Prescient — Next Word Prediction</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --ink:      #0e0e0e;
+  --paper:    #f5f2ed;
+  --cream:    #ede9e1;
+  --warm:     #d4cfc6;
+  --mid:      #9a9590;
+  --soft:     #c8c3bb;
+  --accent:   #c85a2a;
+  --accent-d: #a04520;
+  --serif:    'Instrument Serif', Georgia, serif;
+  --mono:     'DM Mono', 'Courier New', monospace;
+  --r:        6px;
+}
+
+html { font-size: 16px; }
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--serif);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  -webkit-font-smoothing: antialiased;
+}
+
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 0;
+  opacity: .6;
+}
+
+.page {
+  position: relative; z-index: 1;
+  max-width: 780px;
+  margin: 0 auto;
+  padding: 0 28px;
+  width: 100%;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+/* NAV */
+nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 32px 0 48px;
+  border-bottom: 1px solid var(--warm);
+  margin-bottom: 64px;
+}
+
+.logo {
+  font-family: var(--serif);
+  font-size: 1.35rem;
+  letter-spacing: -.01em;
+  color: var(--ink);
+  font-style: italic;
+}
+.logo span {
+  display: inline-block;
+  width: 7px; height: 7px;
+  background: var(--accent);
+  border-radius: 50%;
+  margin-left: 3px;
+  vertical-align: middle;
+  position: relative; top: -1px;
+}
+.nav-tag {
+  font-family: var(--mono);
+  font-size: .65rem;
+  color: var(--mid);
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+/* HERO */
+.hero {
+  margin-bottom: 60px;
+  animation: rise .7s cubic-bezier(.22,1,.36,1) both;
+}
+@keyframes rise {
+  from { opacity: 0; transform: translateY(24px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.hero-eyebrow {
+  font-family: var(--mono);
+  font-size: .68rem;
+  color: var(--accent);
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  margin-bottom: 18px;
+}
+.hero h1 {
+  font-size: clamp(2.6rem, 6vw, 4.4rem);
+  line-height: 1.08;
+  letter-spacing: -.03em;
+  font-weight: 400;
+  max-width: 680px;
+}
+.hero h1 em { font-style: italic; color: var(--accent); }
+.hero-sub {
+  margin-top: 20px;
+  font-family: var(--mono);
+  font-size: .78rem;
+  color: var(--mid);
+  line-height: 1.7;
+  max-width: 520px;
+}
+
+/* CARD */
+.card {
+  background: #fff;
+  border: 1px solid var(--warm);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 2px 0 var(--warm), 0 8px 40px rgba(14,14,14,.06);
+  animation: rise .7s .1s cubic-bezier(.22,1,.36,1) both;
+  margin-bottom: 40px;
+}
+
+/* INPUT ZONE */
+.input-zone { padding: 28px 28px 0; }
+
+.zone-label {
+  font-family: var(--mono);
+  font-size: .65rem;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--mid);
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.zone-label::after {
+  content: ''; flex: 1; height: 1px; background: var(--cream);
+}
+
+textarea {
+  width: 100%;
+  border: none; outline: none; resize: none;
+  font-family: var(--serif);
+  font-size: 1.05rem;
+  line-height: 1.75;
+  color: var(--ink);
+  background: transparent;
+  min-height: 140px;
+  caret-color: var(--accent);
+}
+textarea::placeholder { color: var(--soft); font-style: italic; }
+
+/* CONTROLS */
+.controls-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 28px;
+  border-top: 1px solid var(--cream);
+  margin-top: 16px;
+  background: var(--paper);
+  flex-wrap: wrap;
+}
+
+.ctrl-label {
+  font-family: var(--mono);
+  font-size: .65rem;
+  color: var(--mid);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.word-btns {
+  display: flex;
+  gap: 6px;
+}
+
+.word-btn {
+  font-family: var(--mono);
+  font-size: .68rem;
+  padding: 5px 12px;
+  border: 1px solid var(--warm);
+  border-radius: 4px;
+  background: #fff;
+  color: var(--mid);
+  cursor: pointer;
+  transition: all .15s;
+}
+.word-btn:hover { border-color: var(--ink); color: var(--ink); }
+.word-btn.active { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+
+/* ACTION BAR */
+.action-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 28px 20px;
+  gap: 12px;
+}
+
+.char-count {
+  font-family: var(--mono);
+  font-size: .68rem;
+  color: var(--soft);
+  transition: color .2s;
+}
+.char-count.has-text { color: var(--mid); }
+
+.predict-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 26px;
+  background: var(--ink);
+  color: var(--paper);
+  border: none;
+  border-radius: var(--r);
+  font-family: var(--mono);
+  font-size: .78rem;
+  letter-spacing: .06em;
+  cursor: pointer;
+  transition: background .2s, transform .15s, box-shadow .2s;
+  position: relative; overflow: hidden;
+}
+.predict-btn::after {
+  content: ''; position: absolute; inset: 0;
+  background: rgba(255,255,255,.07);
+  opacity: 0; transition: opacity .15s;
+}
+.predict-btn:hover:not(:disabled)::after { opacity: 1; }
+.predict-btn:hover:not(:disabled) {
+  background: #1a1a1a;
+  box-shadow: 0 4px 16px rgba(14,14,14,.25);
+  transform: translateY(-1px);
+}
+.predict-btn:active:not(:disabled) { transform: translateY(0); }
+.predict-btn:disabled { opacity: .45; cursor: not-allowed; }
+.btn-arrow { display: inline-block; transition: transform .2s; }
+.predict-btn:hover:not(:disabled) .btn-arrow { transform: translateX(3px); }
+
+/* LOADER */
+.loader {
+  display: none;
+  padding: 20px 28px;
+  align-items: center;
+  gap: 14px;
+}
+.loader.show { display: flex; }
+.loader-dots { display: flex; gap: 5px; }
+.loader-dots span {
+  width: 5px; height: 5px;
+  background: var(--soft);
+  border-radius: 50%;
+  animation: pulse 1.2s ease-in-out infinite;
+}
+.loader-dots span:nth-child(2) { animation-delay: .2s; }
+.loader-dots span:nth-child(3) { animation-delay: .4s; }
+@keyframes pulse {
+  0%, 80%, 100% { transform: scale(.6); opacity: .4; }
+  40%            { transform: scale(1);  opacity: 1; }
+}
+.loader-text {
+  font-family: var(--mono);
+  font-size: .72rem;
+  color: var(--mid);
+  animation: loadText 2s ease-in-out infinite;
+}
+@keyframes loadText {
+  0%, 100% { opacity: .5; }
+  50%       { opacity: 1; }
+}
+
+/* ERROR */
+.error-strip {
+  display: none;
+  margin: 0 28px 20px;
+  padding: 12px 16px;
+  background: #fff8f6;
+  border: 1px solid #f5d0c0;
+  border-radius: var(--r);
+  font-family: var(--mono);
+  font-size: .72rem;
+  color: var(--accent-d);
+  line-height: 1.5;
+}
+.error-strip.show { display: block; }
+
+/* OUTPUT */
+.divider-row {
+  display: none;
+  align-items: center;
+  gap: 16px;
+  padding: 0 28px;
+  margin: 4px 0;
+}
+.divider-row.show { display: flex; }
+.div-line { flex: 1; height: 1px; background: var(--cream); }
+.div-label {
+  font-family: var(--mono);
+  font-size: .62rem;
+  color: var(--soft);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.output-zone { display: none; padding: 0 28px 28px; }
+.output-zone.show { display: block; }
+
+/* The full-text display with predictions highlighted */
+.completed-text {
+  font-family: var(--serif);
+  font-size: 1.1rem;
+  line-height: 1.85;
+  color: var(--ink);
+}
+
+.predicted-words {
+  display: inline;
+}
+
+.pred-word {
+  display: inline-block;
+  background: rgba(200, 90, 42, 0.08);
+  border-bottom: 2px solid var(--accent);
+  color: var(--accent-d);
+  padding: 0 2px;
+  margin: 0 1px;
+  border-radius: 2px;
+  opacity: 0;
+  transform: translateY(6px);
+  animation: wordIn .3s cubic-bezier(.22,1,.36,1) forwards;
+}
+
+@keyframes wordIn {
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.pred-legend {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 16px;
+  font-family: var(--mono);
+  font-size: .63rem;
+  color: var(--mid);
+}
+.pred-legend-swatch {
+  width: 20px; height: 3px;
+  background: var(--accent);
+  border-radius: 2px;
+  opacity: .6;
+}
+
+.output-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--cream);
+}
+.out-btn {
+  font-family: var(--mono);
+  font-size: .65rem;
+  letter-spacing: .08em;
+  color: var(--mid);
+  background: var(--paper);
+  border: 1px solid var(--warm);
+  border-radius: 4px;
+  padding: 5px 14px;
+  cursor: pointer;
+  transition: all .18s;
+}
+.out-btn:hover { border-color: var(--ink); color: var(--ink); }
+.out-btn.accent { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.out-btn.accent:hover { background: #222; }
+.out-sep { flex: 1; }
+
+/* EXAMPLES */
+.examples-section {
+  animation: rise .7s .2s cubic-bezier(.22,1,.36,1) both;
+  margin-bottom: 64px;
+}
+.section-head {
+  font-family: var(--mono);
+  font-size: .65rem;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--mid);
+  margin-bottom: 16px;
+}
+.examples-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+}
+.example-pill {
+  padding: 16px 18px;
+  background: #fff;
+  border: 1px solid var(--warm);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all .2s;
+  text-align: left;
+}
+.example-pill:hover {
+  border-color: var(--ink);
+  box-shadow: 0 3px 14px rgba(14,14,14,.09);
+  transform: translateY(-1px);
+}
+.example-pill-tag {
+  font-family: var(--mono);
+  font-size: .6rem;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 6px;
+}
+.example-pill-text {
+  font-family: var(--serif);
+  font-size: .88rem;
+  color: var(--mid);
+  line-height: 1.5;
+  font-style: italic;
+}
+
+/* FOOTER */
+footer {
+  position: relative; z-index: 1;
+  border-top: 1px solid var(--warm);
+  padding: 20px 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.footer-left, .footer-right {
+  font-family: var(--mono);
+  font-size: .62rem;
+  color: var(--soft);
+  letter-spacing: .06em;
+}
+
+@media (max-width: 540px) {
+  .page { padding: 0 16px; }
+  nav { padding: 24px 0 32px; margin-bottom: 40px; }
+  .hero h1 { font-size: 2.2rem; }
+  .action-bar { flex-wrap: wrap; }
+  .predict-btn { width: 100%; justify-content: center; }
+  footer { flex-direction: column; align-items: flex-start; gap: 6px; }
+}
+</style>
+</head>
+<body>
+
+<div class="page">
+
+  <nav>
+    <div class="logo">prescient<span></span></div>
+    <div class="nav-tag">Encoder-Decoder · Seq2Seq</div>
+  </nav>
+
+  <section class="hero">
+    <div class="hero-eyebrow">Next Word Prediction</div>
+    <h1>Finish your<br><em>thought.</em></h1>
+    <p class="hero-sub">
+      Type a sentence or phrase — the encoder reads your context,
+      the decoder predicts what comes next. News-trained, attention-powered.
+    </p>
+  </section>
+
+  <div class="card">
+
+    <div class="input-zone">
+      <div class="zone-label">Your text</div>
+      <textarea
+        id="inputText"
+        placeholder="Start typing a sentence…"
+        spellcheck="false"
+        rows="5"
+      ></textarea>
+    </div>
+
+    <!-- Word count selector -->
+    <div class="controls-row">
+      <span class="ctrl-label">Predict</span>
+      <div class="word-btns">
+        <button class="word-btn" onclick="setWords(1)">1 word</button>
+        <button class="word-btn" onclick="setWords(3)">3 words</button>
+        <button class="word-btn active" onclick="setWords(5)">5 words</button>
+        <button class="word-btn" onclick="setWords(8)">8 words</button>
+      </div>
+    </div>
+
+    <div class="action-bar">
+      <span class="char-count" id="charCount">0 words</span>
+      <button class="predict-btn" id="runBtn" onclick="doPredict()">
+        Predict <span class="btn-arrow">→</span>
+      </button>
+    </div>
+
+    <div class="loader" id="loader">
+      <div class="loader-dots"><span></span><span></span><span></span></div>
+      <span class="loader-text" id="loaderText">Encoding context…</span>
+    </div>
+
+    <div class="error-strip" id="errorStrip"></div>
+
+    <div class="divider-row" id="dividerRow">
+      <div class="div-line"></div>
+      <div class="div-label">Prediction</div>
+      <div class="div-line"></div>
+    </div>
+
+    <div class="output-zone" id="outputZone">
+      <div class="completed-text" id="completedText"></div>
+      <div class="pred-legend">
+        <div class="pred-legend-swatch"></div>
+        predicted words
+      </div>
+      <div class="output-actions">
+        <button class="out-btn" onclick="doAccept()">Accept & continue</button>
+        <button class="out-btn" onclick="doCopy()">Copy</button>
+        <div class="out-sep"></div>
+        <button class="out-btn accent" onclick="doPredict()">Predict again →</button>
+      </div>
+    </div>
+
+  </div>
+
+  <section class="examples-section">
+    <div class="section-head">Try an example</div>
+    <div class="examples-row">
+
+      <div class="example-pill" onclick="loadExample('politics')">
+        <div class="example-pill-tag">Politics</div>
+        <div class="example-pill-text">The president signed the new bill into</div>
+      </div>
+
+      <div class="example-pill" onclick="loadExample('tech')">
+        <div class="example-pill-tag">Technology</div>
+        <div class="example-pill-text">Apple announced a new version of its</div>
+      </div>
+
+      <div class="example-pill" onclick="loadExample('sports')">
+        <div class="example-pill-tag">Sports</div>
+        <div class="example-pill-text">The team won the championship after</div>
+      </div>
+
+      <div class="example-pill" onclick="loadExample('business')">
+        <div class="example-pill-tag">Business</div>
+        <div class="example-pill-text">The stock market fell sharply today after</div>
+      </div>
+
+    </div>
+  </section>
+
+</div>
+
+<footer>
+  <span class="footer-left">Prescient · ATML Lab 6 · Task 4</span>
+  <span class="footer-right">Encoder-Decoder LSTM · PyTorch</span>
+</footer>
+
+<script>
+const API = '';  // empty = same origin
+
+let numWords = 5;
+let lastPrediction = [];
+
+// ── Word count ─────────────────────────────────────────────────────────────
+const textarea  = document.getElementById('inputText');
+const charCount = document.getElementById('charCount');
+
+textarea.addEventListener('input', () => {
+  const words = textarea.value.trim().split(/\s+/).filter(Boolean).length;
+  charCount.textContent = words + (words === 1 ? ' word' : ' words');
+  charCount.classList.toggle('has-text', words > 0);
+});
+
+// ── Word selector ──────────────────────────────────────────────────────────
+function setWords(n) {
+  numWords = n;
+  document.querySelectorAll('.word-btn').forEach(b => {
+    b.classList.toggle('active', parseInt(b.textContent) === n);
+  });
+}
+
+// ── Loader ─────────────────────────────────────────────────────────────────
+const loaderMessages = [
+  'Encoding context…',
+  'Attending to sequence…',
+  'Decoding next tokens…',
+  'Generating prediction…',
+];
+let loaderInterval = null;
+
+function startLoader() {
+  let i = 0;
+  const el = document.getElementById('loaderText');
+  el.textContent = loaderMessages[0];
+  loaderInterval = setInterval(() => {
+    i = (i + 1) % loaderMessages.length;
+    el.textContent = loaderMessages[i];
+  }, 800);
+}
+function stopLoader() { clearInterval(loaderInterval); }
+
+// ── Predict ────────────────────────────────────────────────────────────────
+async function doPredict() {
+  const text = textarea.value.trim();
+  if (!text) return;
+
+  hideOutput();
+  document.getElementById('errorStrip').classList.remove('show');
+  document.getElementById('runBtn').disabled = true;
+  document.getElementById('loader').classList.add('show');
+  startLoader();
+
+  try {
+    const res = await fetch((API || '') + '/predict', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, num_words: numWords }),
+    });
+
+    const data = await res.json();
+    stopLoader();
+    document.getElementById('loader').classList.remove('show');
+    document.getElementById('runBtn').disabled = false;
+
+    if (!res.ok) {
+      showError(data.detail || 'Something went wrong.');
+      return;
+    }
+
+    lastPrediction = data.prediction;
+    showOutput(text, data.prediction);
+
+  } catch (err) {
+    stopLoader();
+    document.getElementById('loader').classList.remove('show');
+    document.getElementById('runBtn').disabled = false;
+    showError('Could not reach the server. Is it running?');
+  }
+}
+
+function showOutput(inputText, words) {
+  document.getElementById('dividerRow').classList.add('show');
+  document.getElementById('outputZone').classList.add('show');
+
+  const el = document.getElementById('completedText');
+  el.innerHTML = '';
+
+  // Original text node
+  const originalSpan = document.createElement('span');
+  originalSpan.textContent = inputText + ' ';
+  el.appendChild(originalSpan);
+
+  // Each predicted word animated in separately
+  const predSpan = document.createElement('span');
+  predSpan.className = 'predicted-words';
+  words.forEach((w, i) => {
+    const span = document.createElement('span');
+    span.className = 'pred-word';
+    span.textContent = w;
+    span.style.animationDelay = `${i * 120}ms`;
+    predSpan.appendChild(span);
+    if (i < words.length - 1) {
+      predSpan.appendChild(document.createTextNode(' '));
+    }
+  });
+  el.appendChild(predSpan);
+}
+
+function hideOutput() {
+  document.getElementById('dividerRow').classList.remove('show');
+  document.getElementById('outputZone').classList.remove('show');
+  document.getElementById('completedText').innerHTML = '';
+}
+
+function showError(msg) {
+  const el = document.getElementById('errorStrip');
+  el.textContent = msg;
+  el.classList.add('show');
+}
+
+// ── Accept: appends predicted words to textarea and re-focuses
+function doAccept() {
+  if (!lastPrediction.length) return;
+  const current = textarea.value.trimEnd();
+  textarea.value = current + ' ' + lastPrediction.join(' ');
+  const words = textarea.value.trim().split(/\s+/).filter(Boolean).length;
+  charCount.textContent = words + ' words';
+  charCount.classList.add('has-text');
+  hideOutput();
+  document.getElementById('errorStrip').classList.remove('show');
+  textarea.focus();
+  // Move caret to end
+  textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+}
+
+function doCopy() {
+  const text = document.getElementById('completedText').innerText;
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = event.target;
+    const orig = btn.textContent;
+    btn.textContent = 'Copied!';
+    setTimeout(() => btn.textContent = orig, 1600);
+  });
+}
+
+// ── Examples ───────────────────────────────────────────────────────────────
+const examples = {
+  politics:  'The president signed the new bill into',
+  tech:      'Apple announced a new version of its operating system featuring',
+  sports:    'The team won the championship after a stunning comeback in',
+  business:  'The stock market fell sharply today after the federal reserve announced',
+};
+
+function loadExample(key) {
+  textarea.value = examples[key];
+  const words = textarea.value.trim().split(/\s+/).length;
+  charCount.textContent = words + ' words';
+  charCount.classList.add('has-text');
+  hideOutput();
+  document.getElementById('errorStrip').classList.remove('show');
+  textarea.focus();
+}
+
+// Ctrl/Cmd + Enter to predict
+textarea.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') doPredict();
+});
+</script>
+</body>
+</html>
